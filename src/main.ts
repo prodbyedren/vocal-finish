@@ -59,10 +59,15 @@ function draw(){
     const wrap=document.createElement('div'); wrap.className='control';
     wrap.innerHTML='<div class="knob" role="slider" aria-label="'+name+'" tabindex="0"></div><label>'+name+'</label><div class="value">'+values[i]+'%</div>';
     const knob=wrap.querySelector<HTMLDivElement>('.knob')!; knob.style.setProperty('--v',String(values[i]));
-    const set=(v:number)=>{values[i]=Math.max(0,Math.min(100,v));knob.style.setProperty('--v',String(values[i]));wrap.querySelector('.value')!.textContent=values[i]+'%';updateAudio();};
-    knob.addEventListener('wheel',e=>{e.preventDefault();set(values[i]+(e.deltaY<0?2:-2));});
-    knob.addEventListener('click',()=>set(values[i]>=100?0:values[i]+10));
-    knob.addEventListener('keydown',e=>{if(e.key==='ArrowUp'||e.key==='ArrowRight')set(values[i]+2);if(e.key==='ArrowDown'||e.key==='ArrowLeft')set(values[i]-2);});
+    const set=(v:number)=>{values[i]=Math.round(Math.max(0,Math.min(100,v)));knob.style.setProperty('--v',String(values[i]));wrap.querySelector('.value')!.textContent=values[i]+'%';knob.setAttribute('aria-valuenow',String(values[i]));updateAudio();};
+    let dragging=false,startY=0,startValue=0;
+    knob.addEventListener('pointerdown',e=>{dragging=true;startY=e.clientY;startValue=values[i];knob.setPointerCapture(e.pointerId);e.preventDefault();});
+    knob.addEventListener('pointermove',e=>{if(!dragging)return;set(startValue+(startY-e.clientY)*0.75);});
+    const endDrag=(e:PointerEvent)=>{if(!dragging)return;dragging=false;try{knob.releasePointerCapture(e.pointerId);}catch{}};
+    knob.addEventListener('pointerup',endDrag); knob.addEventListener('pointercancel',endDrag);
+    knob.addEventListener('wheel',e=>{e.preventDefault();set(values[i]+(e.deltaY<0?2:-2));},{passive:false});
+    knob.addEventListener('dblclick',()=>set(presets[presetEl.value][i]));
+    knob.addEventListener('keydown',e=>{if(e.key==='ArrowUp'||e.key==='ArrowRight'){e.preventDefault();set(values[i]+2);}if(e.key==='ArrowDown'||e.key==='ArrowLeft'){e.preventDefault();set(values[i]-2);}});
     controls.appendChild(wrap);
   });
 }
