@@ -25,7 +25,7 @@ let startedAt = 0;
 let offset = 0;
 let playing = false;
 let enabled = true;
-let dry: GainNode, wet: GainNode, low: BiquadFilterNode, presence: BiquadFilterNode, air: BiquadFilterNode, comp: DynamicsCompressorNode, warmth: WaveShaperNode, delay: DelayNode, feedback: GainNode, output: GainNode, analyser: AnalyserNode;
+let dry: GainNode, wet: GainNode, low: BiquadFilterNode, presence: BiquadFilterNode, air: BiquadFilterNode, comp: DynamicsCompressorNode, warmth: WaveShaperNode, spaceSend: GainNode, delay: DelayNode, feedback: GainNode, widthSend: GainNode, widthDelay: DelayNode, widthPanL: StereoPannerNode, widthPanR: StereoPannerNode, output: GainNode, limiter: DynamicsCompressorNode, analyser: AnalyserNode;
 
 function makeCurve(amount:number){
   const n=1024, curve=new Float32Array(n), k=amount*8;
@@ -35,9 +35,9 @@ function makeCurve(amount:number){
 function initAudio(){
   if(ctx) return;
   ctx=new AudioContext();
-  dry=ctx.createGain(); wet=ctx.createGain(); low=ctx.createBiquadFilter(); presence=ctx.createBiquadFilter(); air=ctx.createBiquadFilter(); comp=ctx.createDynamicsCompressor(); warmth=ctx.createWaveShaper(); delay=ctx.createDelay(1); feedback=ctx.createGain(); output=ctx.createGain(); analyser=ctx.createAnalyser(); analyser.fftSize=256;
+  dry=ctx.createGain(); wet=ctx.createGain(); low=ctx.createBiquadFilter(); presence=ctx.createBiquadFilter(); air=ctx.createBiquadFilter(); comp=ctx.createDynamicsCompressor(); warmth=ctx.createWaveShaper(); spaceSend=ctx.createGain(); delay=ctx.createDelay(1); feedback=ctx.createGain(); widthSend=ctx.createGain(); widthDelay=ctx.createDelay(.03); widthPanL=ctx.createStereoPanner(); widthPanR=ctx.createStereoPanner(); output=ctx.createGain(); limiter=ctx.createDynamicsCompressor(); analyser=ctx.createAnalyser(); analyser.fftSize=256;
   low.type='highpass'; presence.type='peaking'; presence.frequency.value=3200; presence.Q.value=.7; air.type='highshelf'; air.frequency.value=9000;
-  wet.connect(low); low.connect(comp); comp.connect(presence); presence.connect(air); air.connect(warmth); warmth.connect(output); warmth.connect(delay); delay.connect(feedback); feedback.connect(delay); delay.connect(output); dry.connect(output); output.connect(analyser); analyser.connect(ctx.destination);
+  wet.connect(low); low.connect(comp); comp.connect(presence); presence.connect(air); air.connect(warmth); warmth.connect(output); warmth.connect(spaceSend); spaceSend.connect(delay); delay.connect(feedback); feedback.connect(delay); delay.connect(output); warmth.connect(widthSend); widthSend.connect(widthPanL); widthSend.connect(widthDelay); widthDelay.connect(widthPanR); widthPanL.connect(output); widthPanR.connect(output); widthPanL.pan.value=-.85; widthPanR.pan.value=.85; widthDelay.delayTime.value=.012; dry.connect(output); output.connect(limiter); limiter.threshold.value=-1; limiter.knee.value=0; limiter.ratio.value=20; limiter.attack.value=.003; limiter.release.value=.08; limiter.connect(analyser); analyser.connect(ctx.destination);
   updateAudio();
 }
 function updateAudio(){
@@ -48,10 +48,10 @@ function updateAudio(){
   presence.gain.value=(50-smooth)*.045 + clean*.018;
   air.gain.value=(airV-35)*.095;
   warmth.curve=makeCurve(warm/100); warmth.oversample='2x';
-  delay.delayTime.value=.045+space*.0022; feedback.gain.value=Math.min(.32,space*.0027);
-  const mix=enabled?Number(mixEl.value)/100:0; wet.gain.value=mix; dry.gain.value=1-mix*.68;
+  delay.delayTime.value=.055+space*.0019; feedback.gain.value=Math.min(.24,space*.0022); spaceSend.gain.value=space/100*.34;
+  widthSend.gain.value=width/100*.22; widthDelay.delayTime.value=.007+(width/100)*.009;
+  const mix=enabled?Number(mixEl.value)/100:0; const theta=mix*Math.PI/2; wet.gain.value=enabled?Math.sin(theta):0; dry.gain.value=enabled?Math.cos(theta):1;
   output.gain.value=Math.pow(10,Number(outputEl.value)/20);
-  void width;
 }
 function draw(){
   controls.innerHTML='';
