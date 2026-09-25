@@ -25,7 +25,7 @@ let startedAt = 0;
 let offset = 0;
 let playing = false;
 let enabled = true;
-let dry: GainNode, wet: GainNode, low: BiquadFilterNode, presence: BiquadFilterNode, air: BiquadFilterNode, comp: DynamicsCompressorNode, warmth: WaveShaperNode, delay: DelayNode, feedback: GainNode, output: GainNode;
+let dry: GainNode, wet: GainNode, low: BiquadFilterNode, presence: BiquadFilterNode, air: BiquadFilterNode, comp: DynamicsCompressorNode, warmth: WaveShaperNode, delay: DelayNode, feedback: GainNode, output: GainNode, analyser: AnalyserNode;
 
 function makeCurve(amount:number){
   const n=1024, curve=new Float32Array(n), k=amount*8;
@@ -35,9 +35,9 @@ function makeCurve(amount:number){
 function initAudio(){
   if(ctx) return;
   ctx=new AudioContext();
-  dry=ctx.createGain(); wet=ctx.createGain(); low=ctx.createBiquadFilter(); presence=ctx.createBiquadFilter(); air=ctx.createBiquadFilter(); comp=ctx.createDynamicsCompressor(); warmth=ctx.createWaveShaper(); delay=ctx.createDelay(1); feedback=ctx.createGain(); output=ctx.createGain();
+  dry=ctx.createGain(); wet=ctx.createGain(); low=ctx.createBiquadFilter(); presence=ctx.createBiquadFilter(); air=ctx.createBiquadFilter(); comp=ctx.createDynamicsCompressor(); warmth=ctx.createWaveShaper(); delay=ctx.createDelay(1); feedback=ctx.createGain(); output=ctx.createGain(); analyser=ctx.createAnalyser(); analyser.fftSize=256;
   low.type='highpass'; presence.type='peaking'; presence.frequency.value=3200; presence.Q.value=.7; air.type='highshelf'; air.frequency.value=9000;
-  wet.connect(low); low.connect(comp); comp.connect(presence); presence.connect(air); air.connect(warmth); warmth.connect(output); warmth.connect(delay); delay.connect(feedback); feedback.connect(delay); delay.connect(output); dry.connect(output); output.connect(ctx.destination);
+  wet.connect(low); low.connect(comp); comp.connect(presence); presence.connect(air); air.connect(warmth); warmth.connect(output); warmth.connect(delay); delay.connect(feedback); feedback.connect(delay); delay.connect(output); dry.connect(output); output.connect(analyser); analyser.connect(ctx.destination);
   updateAudio();
 }
 function updateAudio(){
@@ -71,19 +71,20 @@ function stop(){
   if(playing&&ctx) offset=Math.min(buffer?.duration||0,offset+(ctx.currentTime-startedAt));
   playing=false; play.textContent='▶ PLAY';
 }
-function start(){
+async function start(){
   if(!buffer||!ctx) return;
+  if(ctx.state==='suspended') await ctx.resume();
   if(offset>=buffer.duration) offset=0;
   source=ctx.createBufferSource(); source.buffer=buffer; source.connect(dry); source.connect(wet); source.onended=()=>{if(playing){playing=false;offset=0;play.textContent='▶ PLAY';}};
   source.start(0,offset); startedAt=ctx.currentTime; playing=true; play.textContent='❚❚ PAUSE';
 }
 draw();
 document.querySelector('#load')!.addEventListener('click',()=>fileEl.click());
-fileEl.addEventListener('change',async()=>{const f=fileEl.files?.[0];if(!f)return;initAudio();await ctx!.resume();stop();buffer=await ctx!.decodeAudioData(await f.arrayBuffer());offset=0;document.querySelector('#trackName')!.textContent=f.name;play.disabled=false;document.querySelector('.note')!.textContent='Audio engine active • use headphones while comparing presets';document.querySelector('.note')!.classList.add('ready');});
-play.addEventListener('click',async()=>{initAudio();await ctx!.resume();playing?stop():start();});
+fileEl.addEventListener('change',async()=>{const f=fileEl.files?.[0];if(!f)return;try{initAudio();await ctx!.resume();stop();const bytes=await f.arrayBuffer();buffer=await ctx!.decodeAudioData(bytes.slice(0));offset=0;document.querySelector('#trackName')!.textContent=f.name;play.disabled=false;document.querySelector('.note')!.textContent='Audio loaded • press PLAY to test processing';document.querySelector('.note')!.classList.add('ready');}catch(err){console.error(err);buffer=null;play.disabled=true;document.querySelector('.note')!.textContent='Could not decode that file • try WAV, MP3, M4A, or AAC';}});
+play.addEventListener('click',async()=>{initAudio();await ctx!.resume();playing?stop():await start();});
 presetEl.addEventListener('change',()=>{values=presets[presetEl.value].slice();draw();updateAudio();});
 document.querySelector('#reset')!.addEventListener('click',()=>{values=presets['Clean & Natural'].slice();presetEl.value='Clean & Natural';mixEl.value='100';outputEl.value='0';document.querySelector('#mixValue')!.textContent='100%';document.querySelector('#outputValue')!.textContent='0 dB';draw();updateAudio();});
 power.addEventListener('click',()=>{enabled=!enabled;power.classList.toggle('on',enabled);power.classList.toggle('off',!enabled);updateAudio();});
 mixEl.addEventListener('input',()=>{document.querySelector('#mixValue')!.textContent=mixEl.value+'%';updateAudio();});
 outputEl.addEventListener('input',()=>{document.querySelector('#outputValue')!.textContent=outputEl.value+' dB';updateAudio();});
-setInterval(()=>{if(!buffer)return;const current=playing&&ctx?Math.min(buffer.duration,offset+ctx.currentTime-startedAt):offset;const fmt=(s:number)=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(Math.floor(s%60)).padStart(2,'0');document.querySelector('#time')!.textContent=fmt(current)+' / '+fmt(buffer.duration);document.querySelector<HTMLElement>('#inputMeter')!.style.width=(playing?45+Math.random()*45:8)+'%';},150);
+setInterval(()=>{if(!buffer)return;const current=playing&&ctx?Math.min(buffer.duration,offset+ctx.currentTime-startedAt):offset;const fmt=(s:number)=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(Math.floor(s%60)).padStart(2,'0');document.querySelector('#time')!.textContent=fmt(current)+' / '+fmt(buffer.duration);const meter=document.querySelector<HTMLElement>('#inputMeter')!; if(playing&&ctx&&analyser){const data=new Uint8Array(analyser.frequencyBinCount);analyser.getByteTimeDomainData(data);let sum=0;for(const x of data){const v=(x-128)/128;sum+=v*v;}const rms=Math.sqrt(sum/data.length);meter.style.width=Math.min(100,Math.max(8,rms*240))+'%';}else meter.style.width='8%';},150);
