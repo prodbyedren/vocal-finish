@@ -44,13 +44,14 @@ function initAudio(){
 function updateAudio(){
   if(!ctx) return;
   const [clean,tight,smooth,warm,airV,space,width]=values;
-  low.frequency.value=55+clean*1.05;
-  comp.threshold.value=-12-tight*.16; comp.ratio.value=1.5+tight*.045; comp.attack.value=.012+smooth*.00035; comp.release.value=.08+smooth*.0022;
-  presence.gain.value=(50-smooth)*.045 + clean*.018;
-  air.gain.value=(airV-35)*.095;
+  low.frequency.value=45+clean*1.35;
+  low.Q.value=.7;
+  comp.threshold.value=-8-tight*.24; comp.ratio.value=1.25+tight*.06; comp.attack.value=.006+smooth*.00028; comp.release.value=.055+smooth*.0018;
+  presence.frequency.value=3000; presence.Q.value=.85; presence.gain.value=(clean/100)*3.2-(smooth/100)*4.2;
+  air.frequency.value=8500; air.gain.value=(airV/100)*8.5;
   warmth.curve=makeCurve(warm/100); warmth.oversample='2x';
-  delay.delayTime.value=.055+space*.0019; feedback.gain.value=Math.min(.24,space*.0022); spaceSend.gain.value=space/100*.34;
-  widthSend.gain.value=width/100*.22; widthDelay.delayTime.value=.007+(width/100)*.009;
+  delay.delayTime.value=.075+space*.0025; feedback.gain.value=Math.min(.38,space*.0034); spaceSend.gain.value=space/100*.62;
+  widthSend.gain.value=width/100*.42; widthDelay.delayTime.value=.008+(width/100)*.014;
   const mix=enabled?Number(mixEl.value)/100:0; const theta=mix*Math.PI/2; wet.gain.value=enabled?Math.sin(theta):0; dry.gain.value=enabled?Math.cos(theta):1;
   output.gain.value=Math.pow(10,Number(outputEl.value)/20);
 }
@@ -68,7 +69,7 @@ async function exportWav(){
   try{
     const rate=buffer.sampleRate, length=Math.ceil((buffer.duration+1.25)*rate), oc=new OfflineAudioContext(2,length,rate);
     const src=oc.createBufferSource();src.buffer=buffer; const d=oc.createGain(),w=oc.createGain(),hp=oc.createBiquadFilter(),pr=oc.createBiquadFilter(),ar=oc.createBiquadFilter(),co=oc.createDynamicsCompressor(),wa=oc.createWaveShaper(),ss=oc.createGain(),de=oc.createDelay(1),fb=oc.createGain(),ws=oc.createGain(),wd=oc.createDelay(.03),pl=oc.createStereoPanner(),prr=oc.createStereoPanner(),out=oc.createGain(),lim=oc.createDynamicsCompressor();
-    const [clean,tight,smooth,warm,airV,space,width]=values; hp.type='highpass';hp.frequency.value=55+clean*1.05;pr.type='peaking';pr.frequency.value=3200;pr.Q.value=.7;pr.gain.value=(50-smooth)*.045+clean*.018;ar.type='highshelf';ar.frequency.value=9000;ar.gain.value=(airV-35)*.095;co.threshold.value=-12-tight*.16;co.ratio.value=1.5+tight*.045;co.attack.value=.012+smooth*.00035;co.release.value=.08+smooth*.0022;wa.curve=makeCurve(warm/100);wa.oversample='2x';de.delayTime.value=.055+space*.0019;fb.gain.value=Math.min(.24,space*.0022);ss.gain.value=space/100*.34;ws.gain.value=width/100*.22;wd.delayTime.value=.007+(width/100)*.009;pl.pan.value=-.85;prr.pan.value=.85;
+    const [clean,tight,smooth,warm,airV,space,width]=values; hp.type='highpass';hp.frequency.value=45+clean*1.35;hp.Q.value=.7;pr.type='peaking';pr.frequency.value=3000;pr.Q.value=.85;pr.gain.value=(clean/100)*3.2-(smooth/100)*4.2;ar.type='highshelf';ar.frequency.value=8500;ar.gain.value=(airV/100)*8.5;co.threshold.value=-8-tight*.24;co.ratio.value=1.25+tight*.06;co.attack.value=.006+smooth*.00028;co.release.value=.055+smooth*.0018;wa.curve=makeCurve(warm/100);wa.oversample='2x';de.delayTime.value=.075+space*.0025;fb.gain.value=Math.min(.38,space*.0034);ss.gain.value=space/100*.62;ws.gain.value=width/100*.42;wd.delayTime.value=.008+(width/100)*.014;pl.pan.value=-.85;prr.pan.value=.85;
     const mix=enabled?Number(mixEl.value)/100:0,theta=mix*Math.PI/2;w.gain.value=enabled?Math.sin(theta):0;d.gain.value=enabled?Math.cos(theta):1;out.gain.value=Math.pow(10,Number(outputEl.value)/20);lim.threshold.value=-1;lim.knee.value=0;lim.ratio.value=20;lim.attack.value=.003;lim.release.value=.08;
     src.connect(d);src.connect(w);w.connect(hp);hp.connect(co);co.connect(pr);pr.connect(ar);ar.connect(wa);wa.connect(out);wa.connect(ss);ss.connect(de);de.connect(fb);fb.connect(de);de.connect(out);wa.connect(ws);ws.connect(pl);ws.connect(wd);wd.connect(prr);pl.connect(out);prr.connect(out);d.connect(out);out.connect(lim);lim.connect(oc.destination);src.start();
     const rendered=await oc.startRendering(),blob=audioBufferToWav(rendered),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=(fileEl.files?.[0]?.name.replace(/\.[^.]+$/,'')||'vocal')+'-Vocal-Finish.wav';a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);document.querySelector('.note')!.textContent='Export complete • WAV saved with current Vocal Finish settings';
