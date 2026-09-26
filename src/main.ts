@@ -29,7 +29,7 @@ let enabled = true;
 let dry: GainNode, wet: GainNode, low: BiquadFilterNode, presence: BiquadFilterNode, air: BiquadFilterNode, comp: DynamicsCompressorNode, warmth: WaveShaperNode, spaceSend: GainNode, delay: DelayNode, feedback: GainNode, widthSend: GainNode, widthDelay: DelayNode, widthPanL: StereoPannerNode, widthPanR: StereoPannerNode, output: GainNode, limiter: DynamicsCompressorNode, analyser: AnalyserNode;
 
 function makeCurve(amount:number){
-  const n=1024, curve=new Float32Array(n), k=amount*8;
+  const n=1024, curve=new Float32Array(n), k=amount*3.8;
   for(let i=0;i<n;i++){const x=i*2/n-1;curve[i]=((1+k)*x)/(1+k*Math.abs(x));}
   return curve;
 }
@@ -44,14 +44,14 @@ function initAudio(){
 function updateAudio(){
   if(!ctx) return;
   const [clean,tight,smooth,warm,airV,space,width]=values;
-  low.frequency.value=35+clean*1.85;
+  low.frequency.value=35+clean*2.0;
   low.Q.value=.7;
-  comp.threshold.value=-5-tight*.32; comp.ratio.value=1.1+tight*.085; comp.attack.value=.003+smooth*.0004; comp.release.value=.045+smooth*.0024;
-  presence.frequency.value=2900; presence.Q.value=.75; presence.gain.value=(clean/100)*5.5-(smooth/100)*7.0;
-  air.frequency.value=7200; air.gain.value=(airV/100)*12;
+  comp.threshold.value=-4-tight*.36; comp.ratio.value=1.1+tight*.095; comp.attack.value=.003+smooth*.00043; comp.release.value=.045+smooth*.0026;
+  presence.frequency.value=2900; presence.Q.value=.72; presence.gain.value=(clean/100)*6.5-(smooth/100)*8.0;
+  air.frequency.value=6800; air.gain.value=(airV/100)*14;
   warmth.curve=makeCurve(warm/100); warmth.oversample='2x';
-  delay.delayTime.value=.09+space*.0028; feedback.gain.value=Math.min(.48,space*.0042); spaceSend.gain.value=space/100*.9;
-  widthSend.gain.value=width/100*.68; widthDelay.delayTime.value=.009+(width/100)*.018;
+  delay.delayTime.value=.09+space*.0030; feedback.gain.value=Math.min(.52,space*.0046); spaceSend.gain.value=space/100*1.0;
+  widthSend.gain.value=width/100*.78; widthDelay.delayTime.value=.009+(width/100)*.020;
   const mix=enabled?Number(mixEl.value)/100:0; const theta=mix*Math.PI/2; wet.gain.value=enabled?Math.sin(theta):0; dry.gain.value=enabled?Math.cos(theta):1;
   output.gain.value=Math.pow(10,Number(outputEl.value)/20);
 }
@@ -69,7 +69,7 @@ async function exportWav(){
   try{
     const rate=buffer.sampleRate, length=Math.ceil((buffer.duration+1.25)*rate), oc=new OfflineAudioContext(2,length,rate);
     const src=oc.createBufferSource();src.buffer=buffer; const d=oc.createGain(),w=oc.createGain(),hp=oc.createBiquadFilter(),pr=oc.createBiquadFilter(),ar=oc.createBiquadFilter(),co=oc.createDynamicsCompressor(),wa=oc.createWaveShaper(),ss=oc.createGain(),de=oc.createDelay(1),fb=oc.createGain(),ws=oc.createGain(),wd=oc.createDelay(.03),pl=oc.createStereoPanner(),prr=oc.createStereoPanner(),out=oc.createGain(),lim=oc.createDynamicsCompressor();
-    const [clean,tight,smooth,warm,airV,space,width]=values; hp.type='highpass';hp.frequency.value=35+clean*1.85;hp.Q.value=.7;pr.type='peaking';pr.frequency.value=2900;pr.Q.value=.75;pr.gain.value=(clean/100)*5.5-(smooth/100)*7.0;ar.type='highshelf';ar.frequency.value=7200;ar.gain.value=(airV/100)*12;co.threshold.value=-5-tight*.32;co.ratio.value=1.1+tight*.085;co.attack.value=.003+smooth*.0004;co.release.value=.045+smooth*.0024;wa.curve=makeCurve(warm/100);wa.oversample='2x';de.delayTime.value=.09+space*.0028;fb.gain.value=Math.min(.48,space*.0042);ss.gain.value=space/100*.9;ws.gain.value=width/100*.68;wd.delayTime.value=.009+(width/100)*.018;pl.pan.value=-.85;prr.pan.value=.85;
+    const [clean,tight,smooth,warm,airV,space,width]=values; hp.type='highpass';hp.frequency.value=35+clean*2.0;hp.Q.value=.7;pr.type='peaking';pr.frequency.value=2900;pr.Q.value=.72;pr.gain.value=(clean/100)*6.5-(smooth/100)*8.0;ar.type='highshelf';ar.frequency.value=6800;ar.gain.value=(airV/100)*14;co.threshold.value=-4-tight*.36;co.ratio.value=1.1+tight*.095;co.attack.value=.003+smooth*.00043;co.release.value=.045+smooth*.0026;wa.curve=makeCurve(warm/100);wa.oversample='2x';de.delayTime.value=.09+space*.0030;fb.gain.value=Math.min(.52,space*.0046);ss.gain.value=space/100*1.0;ws.gain.value=width/100*.78;wd.delayTime.value=.009+(width/100)*.020;pl.pan.value=-.85;prr.pan.value=.85;
     const mix=enabled?Number(mixEl.value)/100:0,theta=mix*Math.PI/2;w.gain.value=enabled?Math.sin(theta):0;d.gain.value=enabled?Math.cos(theta):1;out.gain.value=Math.pow(10,Number(outputEl.value)/20);lim.threshold.value=-1;lim.knee.value=0;lim.ratio.value=20;lim.attack.value=.003;lim.release.value=.08;
     src.connect(d);src.connect(w);w.connect(hp);hp.connect(co);co.connect(pr);pr.connect(ar);ar.connect(wa);wa.connect(out);wa.connect(ss);ss.connect(de);de.connect(fb);fb.connect(de);de.connect(out);wa.connect(ws);ws.connect(pl);ws.connect(wd);wd.connect(prr);pl.connect(out);prr.connect(out);d.connect(out);out.connect(lim);lim.connect(oc.destination);src.start();
     const rendered=await oc.startRendering(),blob=audioBufferToWav(rendered),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=(fileEl.files?.[0]?.name.replace(/\.[^.]+$/,'')||'vocal')+'-Vocal-Finish.wav';a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);document.querySelector('.note')!.textContent='Export complete • WAV saved with current Vocal Finish settings';
